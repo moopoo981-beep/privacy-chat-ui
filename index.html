@@ -70,7 +70,7 @@
           <div>
             <h2 class="font-bold text-lg">ห้องแชทส่วนตัว</h2>
             <p class="text-xs text-slate-400">
-              เชื่อม Supabase Realtime — ข้อความถูกเข้ารหัสก่อนส่ง
+              ต้องมีรหัสห้อง — ข้อความส่งเป็นรหัสก่อนเข้า Supabase
             </p>
           </div>
 
@@ -157,7 +157,7 @@
           </div>
 
           <!-- รหัส E2EE แยกให้เด่น ใช้ง่ายบนมือถือ -->
-          <details class="control-card bg-slate-900/70 border border-cyan-500/25 rounded-xl p-3" open>
+          <details class="control-card bg-slate-900/70 border border-cyan-500/25 rounded-xl p-3">
             <summary class="cursor-pointer text-sm text-cyan-200 font-bold select-none">
               รหัสห้อง E2EE
             </summary>
@@ -187,7 +187,7 @@
             </div>
 
             <p id="encryptionStatus" class="text-xs text-slate-400 mt-2">
-              ยังไม่ได้ตั้งรหัสห้อง ข้อความใหม่จะส่งไม่ได้ และข้อความเก่าจะแสดงเป็นล็อก
+              ยังไม่ได้ตั้งรหัสห้อง: จะอ่านข้อความและส่งข้อความไม่ได้
             </p>
             <p class="text-[11px] text-slate-500 mt-1">
               รหัสนี้ไม่ถูกส่งไป Supabase ต้องบอกสมาชิกห้องผ่านช่องทางอื่น
@@ -336,7 +336,7 @@
             <textarea
               id="messageInput"
               rows="1"
-              placeholder="พิมพ์ข้อความทดลองที่จะบันทึกลง Supabase..."
+              placeholder="พิมพ์ข้อความ — ระบบจะส่งเป็นรหัส..."
               class="chat-input flex-1 resize-none bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:border-cyan-400"
             ></textarea>
 
@@ -349,7 +349,7 @@
           </div>
 
           <p class="text-[11px] text-slate-500 mt-2">
-            Step 6.1 ใช้ E2EE สำหรับข้อความแล้ว รูปภาพ E2EE จะทำในขั้นถัดไป
+            Step 6.2 ต้องมีรหัสห้องก่อนอ่านข้อความ / พิมพ์แล้วมีเสียงตี๊ด
           </p>
         </footer>
 
