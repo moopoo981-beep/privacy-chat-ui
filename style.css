@@ -185,3 +185,273 @@ img {
     font-size: 13px;
   }
 }
+
+/* Step 6.1: Mobile friendly controls */
+.room-panel {
+  flex-shrink: 0;
+}
+
+.room-action-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.join-row,
+.passphrase-row,
+.friend-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.passphrase-row {
+  grid-template-columns: 1fr auto auto;
+}
+
+.control-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.control-card summary::after {
+  content: "แตะเพื่อเปิด/ปิด";
+  float: right;
+  font-size: 11px;
+  font-weight: 400;
+  color: #94a3b8;
+}
+
+.room-list-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.room-select-btn {
+  min-width: 0;
+}
+
+.room-delete-mini-btn {
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  body {
+    overflow: hidden;
+  }
+
+  main {
+    padding: 0 !important;
+    height: 100dvh !important;
+  }
+
+  main > section {
+    height: 100dvh !important;
+    border-radius: 0 !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+  }
+
+  header {
+    height: auto !important;
+    min-height: 64px;
+    padding: 10px 12px !important;
+    gap: 10px;
+  }
+
+  header h2 {
+    font-size: 16px;
+    line-height: 1.2;
+  }
+
+  header p {
+    display: none;
+  }
+
+  header > div:last-child {
+    gap: 6px;
+  }
+
+  header button {
+    padding: 8px 10px !important;
+    border-radius: 12px !important;
+    font-size: 12px !important;
+  }
+
+  #roomPanel {
+    max-height: 46dvh;
+    overflow-y: auto;
+    padding: 10px !important;
+  }
+
+  .room-action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .room-action-grid button,
+  .join-row button,
+  .passphrase-row button,
+  .friend-row button {
+    width: 100%;
+    padding-top: 11px !important;
+    padding-bottom: 11px !important;
+    font-size: 13px !important;
+  }
+
+  .join-row,
+  .passphrase-row,
+  .friend-row {
+    grid-template-columns: 1fr;
+  }
+
+  #chatBox {
+    padding: 12px !important;
+    gap: 12px;
+  }
+
+  .message-row {
+    gap: 8px;
+  }
+
+  .avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+
+  .message-bubble {
+    max-width: 92%;
+    padding: 10px 12px;
+  }
+
+  footer {
+    padding: 10px !important;
+  }
+
+  footer p {
+    display: none;
+  }
+
+  .chat-input {
+    min-height: 44px;
+    max-height: 96px;
+  }
+}
+
+@media (max-width: 420px) {
+  .room-action-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .room-action-grid button {
+    font-size: 12px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+}
+
+
+/* Step 6.2: Bigger message area on mobile */
+#chatBox {
+  min-height: 0;
+}
+
+footer {
+  flex-shrink: 0;
+}
+
+#roomPanel {
+  transition: max-height 0.2s ease;
+}
+
+@media (max-width: 768px) {
+  #roomPanel {
+    max-height: 29dvh;
+    overflow-y: auto;
+    padding: 8px !important;
+    gap: 8px !important;
+  }
+
+  .control-card {
+    padding: 10px !important;
+    border-radius: 14px;
+  }
+
+  .control-card summary {
+    font-size: 14px;
+  }
+
+  .control-card summary::after {
+    font-size: 10px;
+  }
+
+  #currentRoomIdText {
+    padding: 8px 10px !important;
+    font-size: 12px !important;
+    line-height: 1.35;
+  }
+
+  .room-action-grid {
+    gap: 0.4rem;
+  }
+
+  .join-row,
+  .passphrase-row,
+  .friend-row {
+    gap: 0.4rem;
+  }
+
+  #roomStatus {
+    margin-top: 4px !important;
+    font-size: 11px !important;
+  }
+
+  #chatBox {
+    flex: 1 1 auto;
+    min-height: 34dvh;
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+  }
+
+  .chat-scroll::-webkit-scrollbar {
+    width: 4px;
+  }
+}
+
+@media (max-width: 480px) {
+  #roomPanel {
+    max-height: 24dvh;
+  }
+
+  header {
+    padding: 8px 10px !important;
+  }
+
+  header > div:first-child {
+    min-width: 0;
+  }
+
+  #viewerNameText,
+  #viewerIpText {
+    display: none;
+  }
+
+  .room-action-grid button,
+  .join-row button,
+  .passphrase-row button,
+  .friend-row button {
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+    font-size: 12px !important;
+  }
+
+  #chatBox {
+    min-height: 40dvh;
+  }
+
+  .message-bubble {
+    max-width: 94%;
+  }
+}
