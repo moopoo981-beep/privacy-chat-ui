@@ -1,6 +1,6 @@
 // ===============================
-// Privacy Chat UI - Step 6.2
-// Supabase Auth + Rooms + Delete Rooms + Realtime + E2EE Text Messages + Room Code Gate + Typing Beep
+// Privacy Chat UI - Step 6.3
+// Supabase Auth + Rooms + Delete Rooms + Realtime + E2EE Text Messages + Room Code Gate + Typing Beep + Auto Kick Deleted Room
 // ข้อความถูกเข้ารหัสด้วย Web Crypto API ก่อนส่งเข้า Supabase
 // รูปภาพยังไม่เข้ารหัส/อัปโหลดจริง จะทำในขั้นตอนถัดไป
 // ===============================
@@ -131,6 +131,7 @@ let lastRoomSetupUserId = null;
 let currentRoomId = null;
 let currentRoomSalt = null;
 let messagesChannel = null;
+let roomLifecycleChannel = null;
 let myRooms = [];
 let allowProgrammaticCopy = false;
 const roomKeyCache = new Map();
@@ -381,6 +382,7 @@ async function signOut() {
   }
 
   await cleanupRealtimeChannel();
+  await cleanupRoomLifecycleChannel();
   currentUser = null;
   lastLoadedUserId = null;
   lastRoomSetupUserId = null;
@@ -1096,6 +1098,7 @@ ${roomId}
 
   if (roomId === currentRoomId) {
     await cleanupRealtimeChannel();
+    await cleanupRoomLifecycleChannel();
     roomKeyCache.delete(roomId);
     currentRoomId = null;
     currentRoomSalt = null;
@@ -1171,6 +1174,7 @@ async function setActiveRoom(roomId) {
 
   await loadCurrentRoomSalt(roomId);
   updateEncryptionUI();
+  await subscribeToRoomLifecycle(roomId);
 
   // Step 6.2: ต้องมีรหัสห้องก่อนจึงจะโหลด/อ่านข้อความได้
   // คนที่มีแค่ Room ID จะยังไม่เห็นข้อความในห้อง
@@ -1212,6 +1216,92 @@ async function loadMessages(roomId) {
     await renderDatabaseMessage(message);
   }
   showRoomStatus("พร้อมใช้งาน: ข้อความถูกถอดรหัสในเครื่องคุณเท่านั้น", "success");
+}
+
+async function cleanupRoomLifecycleChannel() {
+  if (roomLifecycleChannel && supabaseClient) {
+    await supabaseClient.removeChannel(roomLifecycleChannel);
+  }
+  roomLifecycleChannel = null;
+}
+
+async function exitCurrentRoomBecauseDeleted(roomId, reasonText) {
+  if (!roomId || roomId !== currentRoomId) return;
+
+  await cleanupRealtimeChannel();
+  await cleanupRoomLifecycleChannel();
+
+  roomKeyCache.delete(roomId);
+  clearSavedRoomId(roomId);
+  currentRoomId = null;
+  currentRoomSalt = null;
+  myRooms = myRooms.filter((room) => room.room_id !== roomId);
+
+  updateCurrentRoomUI();
+  renderRoomList();
+  updateEncryptionUI();
+  clearChatForRoom();
+
+  addSystemMessage("🚪 ห้องนี้ถูกลบแล้ว ระบบพาคุณออกจากห้องอัตโนมัติ");
+  showRoomStatus(reasonText || "ห้องนี้ถูกลบแล้ว ทุกคนถูกออกจากห้องอัตโนมัติ", "error");
+}
+
+async function subscribeToRoomLifecycle(roomId) {
+  await cleanupRoomLifecycleChannel();
+
+  if (!roomId || !currentUser || !supabaseClient) return;
+
+  roomLifecycleChannel = supabaseClient
+    .channel(`room-lifecycle:${roomId}:${currentUser.id}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "DELETE",
+        schema: "public",
+        table: "rooms",
+        filter: `id=eq.${roomId}`,
+      },
+      () => {
+        exitCurrentRoomBecauseDeleted(
+          roomId,
+          "ห้องนี้ถูกเจ้าของลบแล้ว ทุกคนถูกออกจากห้องอัตโนมัติ"
+        ).catch((error) => {
+          console.error("exit deleted room error:", error);
+        });
+      }
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "DELETE",
+        schema: "public",
+        table: "room_members",
+        filter: `room_id=eq.${roomId}`,
+      },
+      (payload) => {
+        const oldRow = payload.old || {};
+
+        // ถ้าห้องถูกลบแบบ cascade หรือสมาชิกคนนี้ถูกเอาออก ให้เตะออกจากห้องทันที
+        if (!oldRow.user_id || oldRow.user_id === currentUser?.id) {
+          exitCurrentRoomBecauseDeleted(
+            roomId,
+            "ห้องนี้ถูกลบ หรือสิทธิ์เข้าห้องของคุณถูกยกเลิกแล้ว"
+          ).catch((error) => {
+            console.error("exit removed member error:", error);
+          });
+        }
+      }
+    )
+    .subscribe((status, error) => {
+      if (error) {
+        console.error("Room lifecycle subscribe error:", error);
+        return;
+      }
+
+      if (status === "SUBSCRIBED") {
+        console.log("Room lifecycle watch enabled");
+      }
+    });
 }
 
 async function cleanupRealtimeChannel() {
