@@ -24,19 +24,19 @@
       <aside class="hidden md:flex w-80 border-r border-slate-700 bg-slate-950/60 flex-col">
         <div class="p-5 border-b border-slate-700">
           <h1 class="text-xl font-bold">Privacy Chat</h1>
-          <p class="text-sm text-slate-400 mt-1">Realtime Demo / Step 5.1</p>
+          <p class="text-sm text-slate-400 mt-1">E2EE Demo / Step 6</p>
         </div>
 
         <div class="p-4 space-y-3">
           <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3">
             <p class="text-sm text-emerald-300 font-semibold">สถานะระบบ</p>
             <p class="text-xs text-slate-300 mt-1">
-              เชื่อม Supabase Auth + ห้องแชท + Realtime / ยังไม่เข้ารหัสจริง
+              เชื่อม Supabase Auth + Realtime + E2EE ข้อความจริง
             </p>
           </div>
 
           <div class="bg-slate-800 rounded-xl p-3">
-            <p class="text-sm font-semibold">ฟีเจอร์ Step 5</p>
+            <p class="text-sm font-semibold">ฟีเจอร์ Step 6.1</p>
             <ul class="text-xs text-slate-400 mt-2 space-y-1 list-disc list-inside">
               <li>สร้างห้องแชท</li>
               <li>เข้าห้องด้วย Room ID</li>
@@ -44,7 +44,8 @@
               <li>เพิ่มเพื่อนด้วย User ID</li>
               <li>ส่งข้อความลง Supabase</li>
               <li>รับข้อความใหม่แบบ Realtime</li>
-              <li>ยังไม่ใช่ E2EE จริง</li>
+              <li>ข้อความถูกเข้ารหัสด้วย Web Crypto API</li>
+              <li>ต้องใช้รหัสห้องเดียวกันจึงอ่านข้อความได้</li>
             </ul>
           </div>
 
@@ -69,7 +70,7 @@
           <div>
             <h2 class="font-bold text-lg">ห้องแชทส่วนตัว</h2>
             <p class="text-xs text-slate-400">
-              เชื่อม Supabase Realtime — ข้อความยังไม่เข้ารหัสจริง
+              เชื่อม Supabase Realtime — ข้อความถูกเข้ารหัสก่อนส่ง
             </p>
           </div>
 
@@ -96,93 +97,154 @@
         </header>
 
         <!-- Room Control Panel -->
-        <section class="border-b border-slate-700 bg-slate-950/45 p-3 md:p-4 space-y-3">
-          <div class="flex flex-col xl:flex-row xl:items-center gap-3">
-            <div class="flex-1 min-w-0">
-              <p class="text-xs text-slate-400">ห้องปัจจุบัน</p>
-              <code id="currentRoomIdText" class="block truncate text-xs md:text-sm text-cyan-200 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 mt-1">
-                ยังไม่ได้เลือกห้อง
-              </code>
+        <section id="roomPanel" class="room-panel border-b border-slate-700 bg-slate-950/45 p-3 md:p-4 space-y-3">
+          <!-- แถวหลัก: ใช้ง่ายบนมือถือ -->
+          <div class="control-card bg-slate-900/70 border border-slate-700 rounded-xl p-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 flex-1">
+                <p class="text-xs text-slate-400">ห้องปัจจุบัน</p>
+                <code id="currentRoomIdText" class="block truncate text-xs md:text-sm text-cyan-200 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 mt-1">
+                  ยังไม่ได้เลือกห้อง
+                </code>
+              </div>
             </div>
 
-            <div class="flex flex-col sm:flex-row flex-wrap gap-2">
+            <div class="room-action-grid mt-3">
               <button
                 id="createRoomBtn"
-                class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-sm font-bold"
+                class="px-4 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-sm font-bold"
               >
-                สร้างห้องใหม่
+                + สร้างห้อง
               </button>
 
               <button
                 id="copyRoomIdBtn"
-                class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-cyan-100 text-sm font-bold"
+                class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-cyan-100 text-sm font-bold"
               >
-                คัดลอก ID ห้อง
+                คัดลอก ID
               </button>
 
               <button
                 id="copyInviteLinkBtn"
-                class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-emerald-100 text-sm font-bold"
+                class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-emerald-100 text-sm font-bold"
               >
-                คัดลอกลิงก์เชิญ
+                ลิงก์เชิญ
               </button>
 
+              <button
+                id="deleteRoomBtn"
+                class="px-4 py-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-400/30 text-rose-200 text-sm font-bold"
+              >
+                ลบห้อง
+              </button>
+            </div>
+
+            <div class="join-row mt-3">
               <input
                 id="joinRoomInput"
                 type="text"
                 placeholder="วาง Room ID เพื่อเข้าห้อง"
-                class="min-w-[240px] bg-slate-800 border border-slate-600 rounded-xl px-4 py-2 text-sm outline-none focus:border-cyan-400"
+                class="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:border-cyan-400"
               />
 
               <button
                 id="joinRoomBtn"
-                class="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-sm font-bold"
+                class="px-5 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-sm font-bold"
               >
                 เข้าห้อง
               </button>
             </div>
           </div>
 
-          <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
-            <div class="bg-slate-900/70 border border-slate-700 rounded-xl p-3">
-              <div class="flex items-center justify-between gap-2">
-                <div class="min-w-0">
-                  <p class="text-xs text-slate-400">User ID ของฉัน</p>
-                  <code id="myUserIdText" class="block truncate text-[11px] md:text-xs text-slate-300 mt-1">ยังไม่ได้เข้าสู่ระบบ</code>
-                </div>
-                <button
-                  id="copyMyUserIdBtn"
-                  class="shrink-0 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs text-slate-100"
-                >
-                  คัดลอก User ID
-                </button>
-              </div>
-              <p class="text-[11px] text-slate-500 mt-2">
-                ส่ง User ID นี้ให้เจ้าของห้อง ถ้าต้องการให้เขาเพิ่มคุณเข้าห้องโดยตรง
-              </p>
+          <!-- รหัส E2EE แยกให้เด่น ใช้ง่ายบนมือถือ -->
+          <details class="control-card bg-slate-900/70 border border-cyan-500/25 rounded-xl p-3" open>
+            <summary class="cursor-pointer text-sm text-cyan-200 font-bold select-none">
+              รหัสห้อง E2EE
+            </summary>
+
+            <div class="mt-3 passphrase-row">
+              <input
+                id="roomPassphraseInput"
+                type="password"
+                placeholder="ใส่รหัสลับของห้อง"
+                autocomplete="new-password"
+                class="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:border-cyan-400"
+              />
+
+              <button
+                id="saveRoomKeyBtn"
+                class="px-4 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-sm font-bold"
+              >
+                ใช้รหัส
+              </button>
+
+              <button
+                id="clearRoomKeyBtn"
+                class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-100 text-sm font-bold"
+              >
+                ล้าง
+              </button>
             </div>
 
-            <div class="bg-slate-900/70 border border-slate-700 rounded-xl p-3">
-              <p class="text-xs text-slate-400 mb-2">เพิ่มเพื่อนเข้าห้องปัจจุบันด้วย User ID</p>
-              <div class="flex flex-col sm:flex-row gap-2">
-                <input
-                  id="friendUserIdInput"
-                  type="text"
-                  placeholder="วาง User ID ของเพื่อน"
-                  class="flex-1 bg-slate-800 border border-slate-600 rounded-xl px-4 py-2 text-sm outline-none focus:border-cyan-400"
-                />
-                <button
-                  id="addFriendBtn"
-                  class="px-4 py-2 rounded-xl bg-violet-500 hover:bg-violet-400 text-white text-sm font-bold"
-                >
-                  เพิ่มเพื่อน
-                </button>
+            <p id="encryptionStatus" class="text-xs text-slate-400 mt-2">
+              ยังไม่ได้ตั้งรหัสห้อง ข้อความใหม่จะส่งไม่ได้ และข้อความเก่าจะแสดงเป็นล็อก
+            </p>
+            <p class="text-[11px] text-slate-500 mt-1">
+              รหัสนี้ไม่ถูกส่งไป Supabase ต้องบอกสมาชิกห้องผ่านช่องทางอื่น
+            </p>
+          </details>
+
+          <!-- เมนูเสริม พับไว้เพื่อลดความรกบนมือถือ -->
+          <details class="control-card bg-slate-900/70 border border-slate-700 rounded-xl p-3">
+            <summary class="cursor-pointer text-sm font-bold text-slate-200 select-none">
+              ห้องของฉัน / เพิ่มเพื่อน
+            </summary>
+
+            <div class="mt-3 space-y-3">
+              <div class="bg-slate-950/40 border border-slate-700 rounded-xl p-3">
+                <p class="text-xs text-slate-400 mb-2">ห้องของฉัน</p>
+                <div id="roomListMobile" class="space-y-2 text-xs text-slate-400">
+                  ยังไม่มีข้อมูลห้อง
+                </div>
               </div>
-              <p class="text-[11px] text-slate-500 mt-2">
-                ตอนนี้เพิ่มได้ด้วย User ID ก่อน เพราะระบบค้นหาอีเมลของผู้ใช้อื่นไม่ควรเปิดเผยในเว็บฝั่ง client
-              </p>
+
+              <div class="bg-slate-950/40 border border-slate-700 rounded-xl p-3">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="min-w-0">
+                    <p class="text-xs text-slate-400">User ID ของฉัน</p>
+                    <code id="myUserIdText" class="block truncate text-[11px] md:text-xs text-slate-300 mt-1">ยังไม่ได้เข้าสู่ระบบ</code>
+                  </div>
+                  <button
+                    id="copyMyUserIdBtn"
+                    class="shrink-0 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs text-slate-100"
+                  >
+                    คัดลอก
+                  </button>
+                </div>
+              </div>
+
+              <div class="bg-slate-950/40 border border-slate-700 rounded-xl p-3">
+                <p class="text-xs text-slate-400 mb-2">เพิ่มเพื่อนเข้าห้องปัจจุบันด้วย User ID</p>
+                <div class="friend-row">
+                  <input
+                    id="friendUserIdInput"
+                    type="text"
+                    placeholder="วาง User ID ของเพื่อน"
+                    class="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:border-cyan-400"
+                  />
+                  <button
+                    id="addFriendBtn"
+                    class="px-4 py-3 rounded-xl bg-violet-500 hover:bg-violet-400 text-white text-sm font-bold"
+                  >
+                    เพิ่มเพื่อน
+                  </button>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-2">
+                  ใช้ User ID เพื่อไม่เปิดเผยอีเมลผู้ใช้อื่นในฝั่ง client
+                </p>
+              </div>
             </div>
-          </div>
+          </details>
 
           <p id="roomStatus" class="text-xs text-slate-400 mt-2">
             หลังเข้าสู่ระบบ ให้สร้างห้องใหม่ หรือเข้าห้องด้วย Room ID
@@ -205,7 +267,7 @@
             <div class="message-bubble incoming-bubble">
               <p class="text-xs text-slate-400 mb-1">Alice</p>
               <p class="chat-text">
-                สวัสดี นี่คือข้อความตัวอย่าง ตอนนี้ยังไม่ได้เข้ารหัสจริง จะเริ่มทำ E2EE ในขั้นตอนหลัง
+                สวัสดี นี่คือข้อความตัวอย่าง ข้อความในฐานข้อมูลจะถูกเข้ารหัสด้วย Web Crypto API ใน Step 6
               </p>
               <p class="message-time">13:20</p>
             </div>
@@ -287,7 +349,7 @@
           </div>
 
           <p class="text-[11px] text-slate-500 mt-2">
-            Step 5 บันทึกข้อความลง Supabase Realtime แล้ว แต่ยังไม่ใช่ระบบ E2EE จริง ห้ามส่งข้อมูลสำคัญ
+            Step 6.1 ใช้ E2EE สำหรับข้อความแล้ว รูปภาพ E2EE จะทำในขั้นถัดไป
           </p>
         </footer>
 

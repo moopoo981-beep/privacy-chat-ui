@@ -1,8 +1,8 @@
 // ===============================
-// Privacy Chat UI - Step 5.1
-// Supabase Auth + Rooms + Realtime + Invite/Friends Connected
-// ยังไม่ทำ E2EE จริง
-// ส่งข้อความทดลองเข้า Database จริง แต่ยังไม่เข้ารหัสจริง
+// Privacy Chat UI - Step 6.1
+// Supabase Auth + Rooms + Delete Rooms + Realtime + E2EE Text Messages
+// ข้อความถูกเข้ารหัสด้วย Web Crypto API ก่อนส่งเข้า Supabase
+// รูปภาพยังไม่เข้ารหัส/อัปโหลดจริง จะทำในขั้นตอนถัดไป
 // ===============================
 
 // 1) ใส่ค่าจาก Supabase Dashboard → Project Settings → API
@@ -112,10 +112,16 @@ const joinRoomBtn = document.getElementById("joinRoomBtn");
 const roomList = document.getElementById("roomList");
 const copyRoomIdBtn = document.getElementById("copyRoomIdBtn");
 const copyInviteLinkBtn = document.getElementById("copyInviteLinkBtn");
+const deleteRoomBtn = document.getElementById("deleteRoomBtn");
+const roomListMobile = document.getElementById("roomListMobile");
 const myUserIdText = document.getElementById("myUserIdText");
 const copyMyUserIdBtn = document.getElementById("copyMyUserIdBtn");
 const friendUserIdInput = document.getElementById("friendUserIdInput");
 const addFriendBtn = document.getElementById("addFriendBtn");
+const roomPassphraseInput = document.getElementById("roomPassphraseInput");
+const saveRoomKeyBtn = document.getElementById("saveRoomKeyBtn");
+const clearRoomKeyBtn = document.getElementById("clearRoomKeyBtn");
+const encryptionStatus = document.getElementById("encryptionStatus");
 
 let viewerName = localStorage.getItem("viewerName") || "Guest";
 let viewerIp = localStorage.getItem("viewerIp") || "Demo-IP";
@@ -123,9 +129,11 @@ let currentUser = null;
 let lastLoadedUserId = null;
 let lastRoomSetupUserId = null;
 let currentRoomId = null;
+let currentRoomSalt = null;
 let messagesChannel = null;
 let myRooms = [];
 let allowProgrammaticCopy = false;
+const roomKeyCache = new Map();
 
 // ===============================
 // Auth UI Helpers
@@ -519,6 +527,207 @@ function addSystemMessage(text) {
 }
 
 
+// ===============================
+// Web Crypto API: E2EE Text Helpers
+// ===============================
+
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
+function bytesToBase64(buffer) {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  let binary = "";
+
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+
+  return btoa(binary);
+}
+
+function base64ToBytes(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  return bytes;
+}
+
+function randomBytesBase64(length = 16) {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return bytesToBase64(bytes);
+}
+
+function getSaltBytes(saltText) {
+  const cleaned = String(saltText || "").trim();
+
+  try {
+    if (/^[A-Za-z0-9+/]+={0,2}$/.test(cleaned) && cleaned.length % 4 === 0) {
+      const bytes = base64ToBytes(cleaned);
+      if (bytes.length >= 8) return bytes;
+    }
+  } catch (error) {
+    // fallback เป็น UTF-8 ด้านล่าง
+  }
+
+  return textEncoder.encode(cleaned || currentRoomId || "privacy-chat-default-salt");
+}
+
+async function deriveRoomKey(passphrase, saltText) {
+  const baseKey = await crypto.subtle.importKey(
+    "raw",
+    textEncoder.encode(passphrase),
+    { name: "PBKDF2" },
+    false,
+    ["deriveKey"]
+  );
+
+  return crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: getSaltBytes(saltText),
+      iterations: 250000,
+      hash: "SHA-256",
+    },
+    baseKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+async function encryptText(plainText, key) {
+  const ivBytes = new Uint8Array(12);
+  crypto.getRandomValues(ivBytes);
+
+  const encryptedBuffer = await crypto.subtle.encrypt(
+    {
+      name: "AES-GCM",
+      iv: ivBytes,
+    },
+    key,
+    textEncoder.encode(plainText)
+  );
+
+  return {
+    ciphertext: bytesToBase64(encryptedBuffer),
+    iv: bytesToBase64(ivBytes),
+  };
+}
+
+async function decryptText(ciphertextBase64, ivBase64, key) {
+  const cipherBytes = base64ToBytes(ciphertextBase64);
+  const ivBytes = base64ToBytes(ivBase64);
+
+  const decryptedBuffer = await crypto.subtle.decrypt(
+    {
+      name: "AES-GCM",
+      iv: ivBytes,
+    },
+    key,
+    cipherBytes
+  );
+
+  return textDecoder.decode(decryptedBuffer);
+}
+
+function getCurrentRoomKey() {
+  if (!currentRoomId) return null;
+  return roomKeyCache.get(currentRoomId) || null;
+}
+
+function updateEncryptionUI() {
+  if (!encryptionStatus) return;
+
+  if (!currentRoomId) {
+    encryptionStatus.className = "text-xs text-slate-400 mt-2";
+    encryptionStatus.textContent = "ยังไม่ได้เลือกห้อง จึงยังตั้งรหัส E2EE ไม่ได้";
+    return;
+  }
+
+  if (getCurrentRoomKey()) {
+    encryptionStatus.className = "text-xs text-emerald-300 mt-2";
+    encryptionStatus.textContent = "เปิด E2EE แล้ว: ข้อความใหม่จะถูกเข้ารหัสก่อนส่งเข้า Supabase";
+    return;
+  }
+
+  encryptionStatus.className = "text-xs text-amber-300 mt-2";
+  encryptionStatus.textContent = "ยังไม่ได้ใส่รหัสห้อง: อ่านข้อความเข้ารหัสไม่ได้ และส่งข้อความใหม่ไม่ได้";
+}
+
+async function loadCurrentRoomSalt(roomId) {
+  currentRoomSalt = null;
+
+  if (!roomId || !supabaseClient) return null;
+
+  const { data, error } = await withTimeout(
+    supabaseClient
+      .from("rooms")
+      .select("key_salt")
+      .eq("id", roomId)
+      .single(),
+    10000,
+    "โหลดข้อมูลรหัสห้องไม่สำเร็จ: ใช้เวลานานเกินไป"
+  );
+
+  if (error) {
+    console.error("loadCurrentRoomSalt error:", error);
+    showRoomStatus(getReadableError(error), "error");
+    return null;
+  }
+
+  currentRoomSalt = data?.key_salt || roomId;
+  return currentRoomSalt;
+}
+
+async function saveRoomPassphrase() {
+  if (!currentRoomId) {
+    showRoomStatus("กรุณาสร้างห้องหรือเลือกห้องก่อนตั้งรหัส E2EE", "error");
+    return;
+  }
+
+  const passphrase = (roomPassphraseInput?.value || "").trim();
+
+  if (passphrase.length < 8) {
+    showRoomStatus("รหัสห้องควรยาวอย่างน้อย 8 ตัวอักษร", "error");
+    roomPassphraseInput?.focus();
+    return;
+  }
+
+  showRoomStatus("กำลังสร้างกุญแจ E2EE ในเบราว์เซอร์...", "info");
+
+  try {
+    if (!currentRoomSalt) {
+      await loadCurrentRoomSalt(currentRoomId);
+    }
+
+    const key = await deriveRoomKey(passphrase, currentRoomSalt || currentRoomId);
+    roomKeyCache.set(currentRoomId, key);
+
+    if (roomPassphraseInput) roomPassphraseInput.value = "";
+    updateEncryptionUI();
+    await loadMessages(currentRoomId);
+    showRoomStatus("ใช้รหัสห้องสำเร็จ ข้อความจะแสดงหลังถอดรหัสในเบราว์เซอร์", "success");
+  } catch (error) {
+    console.error("saveRoomPassphrase error:", error);
+    showRoomStatus(`สร้างกุญแจ E2EE ไม่สำเร็จ: ${getReadableError(error)}`, "error");
+  }
+}
+
+async function clearRoomPassphrase() {
+  if (!currentRoomId) return;
+
+  roomKeyCache.delete(currentRoomId);
+  updateEncryptionUI();
+  await loadMessages(currentRoomId);
+  showRoomStatus("ล้างรหัสห้องออกจากหน่วยความจำแล้ว", "success");
+}
+
+
 
 // ===============================
 // Clipboard + Invite Helpers
@@ -578,7 +787,7 @@ async function copyTextToClipboard(text, successMessage) {
 
 // ===============================
 // Rooms + Realtime Messages
-// Step 5: ข้อความยังไม่เข้ารหัสจริง
+// Step 6: ข้อความเข้ารหัสด้วย Web Crypto API
 // ===============================
 
 function showRoomStatus(message, type = "info") {
@@ -602,34 +811,61 @@ function updateCurrentRoomUI() {
 }
 
 function renderRoomList() {
-  if (!roomList) return;
+  const targets = [roomList, roomListMobile].filter(Boolean);
+  if (!targets.length) return;
 
-  if (!myRooms.length) {
-    roomList.innerHTML = "ยังไม่มีห้อง กดสร้างห้องใหม่";
-    return;
-  }
+  targets.forEach((target) => {
+    if (!myRooms.length) {
+      target.innerHTML = "ยังไม่มีห้อง กดสร้างห้องใหม่";
+      return;
+    }
 
-  roomList.innerHTML = "";
+    target.innerHTML = "";
 
-  myRooms.forEach((room) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className =
-      "w-full text-left rounded-lg border px-3 py-2 break-all " +
-      (room.room_id === currentRoomId
-        ? "bg-cyan-500/15 border-cyan-400/40 text-cyan-100"
-        : "bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-700");
+    myRooms.forEach((room) => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "room-list-item";
 
-    button.textContent = room.room_id;
-    button.addEventListener("click", () => setActiveRoom(room.room_id));
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className =
+        "room-select-btn w-full text-left rounded-lg border px-3 py-2 break-all " +
+        (room.room_id === currentRoomId
+          ? "bg-cyan-500/15 border-cyan-400/40 text-cyan-100"
+          : "bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-700");
 
-    roomList.appendChild(button);
+      const shortRole = room.role === "owner" ? "เจ้าของ" : "สมาชิก";
+      button.innerHTML = `
+        <span class="block truncate">${escapeHTML(room.room_id)}</span>
+        <span class="block text-[10px] opacity-70 mt-1">${shortRole}</span>
+      `;
+      button.addEventListener("click", () => setActiveRoom(room.room_id));
+      wrapper.appendChild(button);
+
+      if (room.role === "owner") {
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className =
+          "room-delete-mini-btn rounded-lg border border-rose-400/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-200 px-3 py-2 text-xs";
+        deleteBtn.textContent = "ลบ";
+        deleteBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          deleteRoom(room.room_id).catch((error) => {
+            console.error("deleteRoom exception:", error);
+            showRoomStatus(getReadableError(error), "error");
+          });
+        });
+        wrapper.appendChild(deleteBtn);
+      }
+
+      target.appendChild(wrapper);
+    });
   });
 }
 
 function clearChatForRoom() {
   chatBox.innerHTML = "";
-  addSystemMessage("โหลดข้อความจาก Supabase Realtime แล้ว — ขั้นนี้ยังไม่ใช่ E2EE จริง");
+  addSystemMessage("โหลดข้อความจาก Supabase Realtime แล้ว — Step 6 ใช้ E2EE สำหรับข้อความ");
 }
 
 function getSavedRoomId() {
@@ -640,6 +876,15 @@ function getSavedRoomId() {
 function saveCurrentRoomId(roomId) {
   if (!currentUser || !roomId) return;
   localStorage.setItem(`currentRoomId:${currentUser.id}`, roomId);
+}
+
+function clearSavedRoomId(roomId = currentRoomId) {
+  if (!currentUser) return;
+
+  const key = `currentRoomId:${currentUser.id}`;
+  if (!roomId || localStorage.getItem(key) === roomId) {
+    localStorage.removeItem(key);
+  }
 }
 
 async function setupRoomsAfterLogin() {
@@ -700,7 +945,7 @@ async function createRoom() {
   }
 
   const roomId = crypto.randomUUID();
-  const keySalt = crypto.randomUUID();
+  const keySalt = randomBytesBase64(16);
 
   showRoomStatus("กำลังสร้างห้องใหม่...", "info");
 
@@ -708,8 +953,8 @@ async function createRoom() {
     supabaseClient.from("rooms").insert({
       id: roomId,
       created_by: currentUser.id,
-      name_ciphertext: "Demo Room - not encrypted yet",
-      name_iv: "demo-no-iv",
+      name_ciphertext: "encrypted-room-name-not-implemented-yet",
+      name_iv: "not-used-yet",
       key_salt: keySalt,
     }),
     10000,
@@ -741,6 +986,73 @@ async function createRoom() {
   await loadMyRooms();
   await setActiveRoom(roomId);
   showRoomStatus("สร้างห้องสำเร็จ คัดลอก Room ID ให้คนอื่นเข้าห้องได้", "success");
+}
+
+async function deleteRoom(roomId = currentRoomId) {
+  if (!currentUser || !supabaseClient) {
+    showAuthModal();
+    return;
+  }
+
+  if (!roomId) {
+    showRoomStatus("ยังไม่มีห้องให้ลบ", "error");
+    return;
+  }
+
+  const roomInfo = myRooms.find((room) => room.room_id === roomId);
+
+  if (roomInfo?.role !== "owner") {
+    showRoomStatus("ลบได้เฉพาะห้องที่คุณสร้างเองเท่านั้น", "error");
+    return;
+  }
+
+  const ok = window.confirm(
+    `ต้องการลบห้องนี้ถาวรหรือไม่?
+
+${roomId}
+
+ข้อความและสมาชิกในห้องจะถูกลบตามไปด้วย`
+  );
+
+  if (!ok) return;
+
+  showRoomStatus("กำลังลบห้อง...", "info");
+
+  const { error } = await withTimeout(
+    supabaseClient
+      .from("rooms")
+      .delete()
+      .eq("id", roomId)
+      .eq("created_by", currentUser.id),
+    10000,
+    "ลบห้องไม่สำเร็จ: ใช้เวลานานเกินไป"
+  );
+
+  if (error) {
+    console.error("deleteRoom error:", error);
+    showRoomStatus(`${getReadableError(error)} — ลบได้เฉพาะเจ้าของห้อง และต้องมี RLS policy rooms_delete_creator`, "error");
+    return;
+  }
+
+  if (roomId === currentRoomId) {
+    await cleanupRealtimeChannel();
+    roomKeyCache.delete(roomId);
+    currentRoomId = null;
+    currentRoomSalt = null;
+    clearSavedRoomId(roomId);
+    clearChatForRoom();
+  }
+
+  await loadMyRooms();
+
+  if (myRooms.length > 0) {
+    await setActiveRoom(myRooms[0].room_id);
+    showRoomStatus("ลบห้องสำเร็จ และสลับไปห้องถัดไปแล้ว", "success");
+  } else {
+    updateCurrentRoomUI();
+    updateEncryptionUI();
+    showRoomStatus("ลบห้องสำเร็จ ตอนนี้ยังไม่มีห้อง ให้กดสร้างห้องใหม่", "success");
+  }
 }
 
 async function joinRoom() {
@@ -797,6 +1109,8 @@ async function setActiveRoom(roomId) {
   updateCurrentRoomUI();
   renderRoomList();
 
+  await loadCurrentRoomSalt(roomId);
+  updateEncryptionUI();
   await loadMessages(roomId);
   await subscribeToRoom(roomId);
 }
@@ -822,8 +1136,10 @@ async function loadMessages(roomId) {
     return;
   }
 
-  (data || []).forEach(renderDatabaseMessage);
-  showRoomStatus("พร้อมใช้งาน Realtime", "success");
+  for (const message of data || []) {
+    await renderDatabaseMessage(message);
+  }
+  showRoomStatus("พร้อมใช้งาน Realtime + E2EE", "success");
 }
 
 async function cleanupRealtimeChannel() {
@@ -847,7 +1163,9 @@ async function subscribeToRoom(roomId) {
         filter: `room_id=eq.${roomId}`,
       },
       (payload) => {
-        renderDatabaseMessage(payload.new);
+        renderDatabaseMessage(payload.new).catch((error) => {
+          console.error("render realtime message error:", error);
+        });
       }
     )
     .subscribe((status, error) => {
@@ -863,14 +1181,35 @@ async function subscribeToRoom(roomId) {
     });
 }
 
-function renderDatabaseMessage(message) {
+async function renderDatabaseMessage(message) {
   if (!message || document.querySelector(`[data-message-id="${message.id}"]`)) {
     return;
   }
 
   const isMine = message.sender_id === currentUser?.id;
   const senderLabel = isMine ? "คุณ" : `สมาชิก ${String(message.sender_id).slice(0, 8)}`;
-  const text = message.ciphertext || "";
+  let text = "";
+  let locked = false;
+
+  if (message.message_type === "text") {
+    const roomKey = getCurrentRoomKey();
+
+    if (!roomKey) {
+      locked = true;
+      text = "🔒 ข้อความเข้ารหัส — ใส่รหัสห้องให้ถูกต้องเพื่ออ่านข้อความ";
+    } else {
+      try {
+        text = await decryptText(message.ciphertext, message.iv, roomKey);
+      } catch (error) {
+        locked = true;
+        text = "🔒 ถอดรหัสไม่ได้ — รหัสห้องไม่ถูกต้อง หรือเป็นข้อความเก่าก่อนเปิด E2EE";
+        console.warn("decrypt message failed:", error);
+      }
+    }
+  } else {
+    locked = true;
+    text = "🔒 ไฟล์/รูปภาพเข้ารหัสจะทำในขั้นตอนถัดไป";
+  }
 
   const row = document.createElement("div");
   row.className = `message-row ${isMine ? "outgoing" : "incoming"}`;
@@ -886,12 +1225,16 @@ function renderDatabaseMessage(message) {
   const bubbleClass = isMine ? "outgoing-bubble" : "incoming-bubble";
   const avatar = isMine ? "" : `<div class="avatar">${escapeHTML(senderLabel.charAt(0))}</div>`;
   const nameLine = isMine ? "" : `<p class="text-xs text-slate-400 mb-1">${escapeHTML(senderLabel)}</p>`;
+  const lockBadge = locked
+    ? `<p class="text-[10px] mt-1 opacity-70">encrypted / locked</p>`
+    : `<p class="text-[10px] mt-1 opacity-70">E2EE decrypted in browser</p>`;
 
   row.innerHTML = `
     ${avatar}
     <div class="message-bubble ${bubbleClass}">
       ${nameLine}
       <p class="chat-text">${escapeHTML(text)}</p>
+      ${lockBadge}
       <p class="message-time">${time}</p>
     </div>
   `;
@@ -911,13 +1254,23 @@ async function sendTextMessageToSupabase(text) {
     return;
   }
 
+  const roomKey = getCurrentRoomKey();
+
+  if (!roomKey) {
+    showRoomStatus("กรุณาใส่รหัสห้อง E2EE และกด ‘ใช้รหัสนี้’ ก่อนส่งข้อความ", "error");
+    roomPassphraseInput?.focus();
+    return;
+  }
+
+  const encrypted = await encryptText(text, roomKey);
+
   const { error } = await withTimeout(
     supabaseClient.from("messages").insert({
       room_id: currentRoomId,
       sender_id: currentUser.id,
       message_type: "text",
-      ciphertext: text,
-      iv: "demo-no-encryption-yet",
+      ciphertext: encrypted.ciphertext,
+      iv: encrypted.iv,
     }),
     10000,
     "ส่งข้อความไม่สำเร็จ: ใช้เวลานานเกินไป"
@@ -929,7 +1282,7 @@ async function sendTextMessageToSupabase(text) {
     return;
   }
 
-  showRoomStatus("ส่งข้อความแล้ว รอ Realtime แสดงในห้อง", "success");
+  showRoomStatus("ส่งข้อความเข้ารหัสแล้ว Supabase เห็นเฉพาะ ciphertext", "success");
 }
 
 
@@ -1029,6 +1382,16 @@ if (copyInviteLinkBtn) {
   });
 }
 
+if (deleteRoomBtn) {
+  deleteRoomBtn.addEventListener("click", () => {
+    deleteRoom(currentRoomId).catch((error) => {
+      console.error("delete current room exception:", error);
+      showRoomStatus(getReadableError(error), "error");
+    });
+  });
+}
+
+
 if (copyMyUserIdBtn) {
   copyMyUserIdBtn.addEventListener("click", () => {
     copyTextToClipboard(currentUser?.id, "คัดลอก User ID ของคุณแล้ว");
@@ -1052,9 +1415,37 @@ if (friendUserIdInput) {
   });
 }
 
+
+if (saveRoomKeyBtn) {
+  saveRoomKeyBtn.addEventListener("click", () => {
+    saveRoomPassphrase().catch((error) => {
+      console.error("saveRoomPassphrase exception:", error);
+      showRoomStatus(getReadableError(error), "error");
+    });
+  });
+}
+
+if (clearRoomKeyBtn) {
+  clearRoomKeyBtn.addEventListener("click", () => {
+    clearRoomPassphrase().catch((error) => {
+      console.error("clearRoomPassphrase exception:", error);
+      showRoomStatus(getReadableError(error), "error");
+    });
+  });
+}
+
+if (roomPassphraseInput) {
+  roomPassphraseInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      saveRoomKeyBtn?.click();
+    }
+  });
+}
+
 // ===============================
-// ส่งข้อความทดลองเข้า Supabase
-// ขั้นนี้ยังไม่เข้ารหัสจริง
+// ส่งข้อความเข้ารหัสเข้า Supabase
+// Step 6: ข้อความถูกเข้ารหัสก่อนบันทึก
 // ===============================
 
 function addTextMessage(text) {
@@ -1377,11 +1768,11 @@ async function initApp() {
   await getCurrentSession();
 
   console.log(
-    "%cPrivacy Chat UI Step 5.1",
+    "%cPrivacy Chat UI Step 6",
     "color:#22d3ee;font-size:18px;font-weight:bold;"
   );
 
-  console.log("เชื่อม Supabase Auth + Rooms + Realtime + คัดลอกห้อง/เพิ่มเพื่อนแล้ว แต่ยังไม่ทำ E2EE จริง");
+  console.log("เชื่อม Supabase Auth + Rooms + Realtime แล้ว และเปิด E2EE สำหรับข้อความด้วย Web Crypto API");
 }
 
 initApp();
