@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Privacy Chat UI</title>
+
+  <!-- Tailwind CSS ผ่าน CDN: ฟรี ใช้ง่าย เหมาะกับ GitHub Pages -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- CSS เพิ่มเติมของเรา -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body class="bg-slate-950 text-slate-100 min-h-screen overflow-hidden">
+
+  <!-- App Container -->
+  <main class="h-screen w-full flex items-center justify-center p-3 md:p-6">
+
+    <section class="w-full max-w-6xl h-full md:h-[92vh] bg-slate-900/90 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden flex">
+
+      <!-- Sidebar -->
+      <aside class="hidden md:flex w-80 border-r border-slate-700 bg-slate-950/60 flex-col">
+        <div class="p-5 border-b border-slate-700">
+          <h1 class="text-xl font-bold">Privacy Chat</h1>
+          <p class="text-sm text-slate-400 mt-1">Realtime Demo / Step 5.1</p>
+        </div>
+
+        <div class="p-4 space-y-3">
+          <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3">
+            <p class="text-sm text-emerald-300 font-semibold">สถานะระบบ</p>
+            <p class="text-xs text-slate-300 mt-1">
+              เชื่อม Supabase Auth + ห้องแชท + Realtime / ยังไม่เข้ารหัสจริง
+            </p>
+          </div>
+
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-sm font-semibold">ฟีเจอร์ Step 5</p>
+            <ul class="text-xs text-slate-400 mt-2 space-y-1 list-disc list-inside">
+              <li>สร้างห้องแชท</li>
+              <li>เข้าห้องด้วย Room ID</li>
+              <li>คัดลอก Room ID / ลิงก์เชิญ</li>
+              <li>เพิ่มเพื่อนด้วย User ID</li>
+              <li>ส่งข้อความลง Supabase</li>
+              <li>รับข้อความใหม่แบบ Realtime</li>
+              <li>ยังไม่ใช่ E2EE จริง</li>
+            </ul>
+          </div>
+
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-sm font-semibold">ห้องของฉัน</p>
+            <div id="roomList" class="mt-2 space-y-2 text-xs text-slate-400">
+              ยังไม่มีข้อมูลห้อง
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-auto p-4 text-xs text-slate-500">
+          ใช้ HTML5 + Tailwind CDN + Vanilla JavaScript
+        </div>
+      </aside>
+
+      <!-- Chat Area -->
+      <section class="flex-1 flex flex-col min-w-0">
+
+        <!-- Header -->
+        <header class="h-20 border-b border-slate-700 flex items-center justify-between px-4 md:px-6 bg-slate-900">
+          <div>
+            <h2 class="font-bold text-lg">ห้องแชทส่วนตัว</h2>
+            <p class="text-xs text-slate-400">
+              เชื่อม Supabase Realtime — ข้อความยังไม่เข้ารหัสจริง
+            </p>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <div class="hidden sm:block text-right">
+              <p id="viewerNameText" class="text-sm font-semibold">Guest</p>
+              <p id="viewerIpText" class="text-xs text-slate-400">IP: Demo</p>
+            </div>
+
+            <button
+              id="settingsBtn"
+              class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-sm"
+            >
+              ตั้งค่า
+            </button>
+
+            <button
+              id="signOutBtn"
+              class="px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-400/30 text-rose-200 text-sm"
+            >
+              ออก
+            </button>
+          </div>
+        </header>
+
+        <!-- Room Control Panel -->
+        <section class="border-b border-slate-700 bg-slate-950/45 p-3 md:p-4 space-y-3">
+          <div class="flex flex-col xl:flex-row xl:items-center gap-3">
+            <div class="flex-1 min-w-0">
+              <p class="text-xs text-slate-400">ห้องปัจจุบัน</p>
+              <code id="currentRoomIdText" class="block truncate text-xs md:text-sm text-cyan-200 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 mt-1">
+                ยังไม่ได้เลือกห้อง
+              </code>
+            </div>
+
+            <div class="flex flex-col sm:flex-row flex-wrap gap-2">
+              <button
+                id="createRoomBtn"
+                class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-sm font-bold"
+              >
+                สร้างห้องใหม่
+              </button>
+
+              <button
+                id="copyRoomIdBtn"
+                class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-cyan-100 text-sm font-bold"
+              >
+                คัดลอก ID ห้อง
+              </button>
+
+              <button
+                id="copyInviteLinkBtn"
+                class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-emerald-100 text-sm font-bold"
+              >
+                คัดลอกลิงก์เชิญ
+              </button>
+
+              <input
+                id="joinRoomInput"
+                type="text"
+                placeholder="วาง Room ID เพื่อเข้าห้อง"
+                class="min-w-[240px] bg-slate-800 border border-slate-600 rounded-xl px-4 py-2 text-sm outline-none focus:border-cyan-400"
+              />
+
+              <button
+                id="joinRoomBtn"
+                class="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-sm font-bold"
+              >
+                เข้าห้อง
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
+            <div class="bg-slate-900/70 border border-slate-700 rounded-xl p-3">
+              <div class="flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="text-xs text-slate-400">User ID ของฉัน</p>
+                  <code id="myUserIdText" class="block truncate text-[11px] md:text-xs text-slate-300 mt-1">ยังไม่ได้เข้าสู่ระบบ</code>
+                </div>
+                <button
+                  id="copyMyUserIdBtn"
+                  class="shrink-0 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs text-slate-100"
+                >
+                  คัดลอก User ID
+                </button>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-2">
+                ส่ง User ID นี้ให้เจ้าของห้อง ถ้าต้องการให้เขาเพิ่มคุณเข้าห้องโดยตรง
+              </p>
+            </div>
+
+            <div class="bg-slate-900/70 border border-slate-700 rounded-xl p-3">
+              <p class="text-xs text-slate-400 mb-2">เพิ่มเพื่อนเข้าห้องปัจจุบันด้วย User ID</p>
+              <div class="flex flex-col sm:flex-row gap-2">
+                <input
+                  id="friendUserIdInput"
+                  type="text"
+                  placeholder="วาง User ID ของเพื่อน"
+                  class="flex-1 bg-slate-800 border border-slate-600 rounded-xl px-4 py-2 text-sm outline-none focus:border-cyan-400"
+                />
+                <button
+                  id="addFriendBtn"
+                  class="px-4 py-2 rounded-xl bg-violet-500 hover:bg-violet-400 text-white text-sm font-bold"
+                >
+                  เพิ่มเพื่อน
+                </button>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-2">
+                ตอนนี้เพิ่มได้ด้วย User ID ก่อน เพราะระบบค้นหาอีเมลของผู้ใช้อื่นไม่ควรเปิดเผยในเว็บฝั่ง client
+              </p>
+            </div>
+          </div>
+
+          <p id="roomStatus" class="text-xs text-slate-400 mt-2">
+            หลังเข้าสู่ระบบ ให้สร้างห้องใหม่ หรือเข้าห้องด้วย Room ID
+          </p>
+        </section>
+
+        <!-- Chat Messages -->
+        <div id="chatBox" class="chat-scroll flex-1 overflow-y-auto p-4 md:p-6 space-y-5">
+
+          <!-- System Message -->
+          <div class="flex justify-center">
+            <div class="text-xs text-slate-400 bg-slate-800/80 border border-slate-700 px-4 py-2 rounded-full">
+              เริ่มต้นตัวอย่างหน้าเว็บแชท Privacy-Focused
+            </div>
+          </div>
+
+          <!-- Sample Text Message -->
+          <div class="message-row incoming">
+            <div class="avatar">A</div>
+            <div class="message-bubble incoming-bubble">
+              <p class="text-xs text-slate-400 mb-1">Alice</p>
+              <p class="chat-text">
+                สวัสดี นี่คือข้อความตัวอย่าง ตอนนี้ยังไม่ได้เข้ารหัสจริง จะเริ่มทำ E2EE ในขั้นตอนหลัง
+              </p>
+              <p class="message-time">13:20</p>
+            </div>
+          </div>
+
+          <!-- Sample Protected Image -->
+          <div class="message-row incoming">
+            <div class="avatar">A</div>
+            <div class="message-bubble incoming-bubble max-w-sm">
+              <p class="text-xs text-slate-400 mb-2">Alice ส่งรูปภาพที่ถูกป้องกัน</p>
+
+              <div class="secure-image-card">
+                <img
+                  class="secure-image protected-image"
+                  alt="Protected demo"
+                  draggable="false"
+                  src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='560' viewBox='0 0 900 560'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1' y1='0' y2='1'%3E%3Cstop stop-color='%230ea5e9'/%3E%3Cstop offset='0.55' stop-color='%237c3aed'/%3E%3Cstop offset='1' stop-color='%23f43f5e'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='900' height='560' fill='url(%23g)'/%3E%3Ccircle cx='180' cy='150' r='95' fill='white' opacity='0.18'/%3E%3Ccircle cx='720' cy='390' r='135' fill='white' opacity='0.16'/%3E%3Ctext x='50%25' y='48%25' dominant-baseline='middle' text-anchor='middle' font-family='Arial' font-size='54' fill='white' font-weight='700'%3EProtected Image%3C/text%3E%3Ctext x='50%25' y='58%25' dominant-baseline='middle' text-anchor='middle' font-family='Arial' font-size='26' fill='white' opacity='0.85'%3EHold to view / Release to blur%3C/text%3E%3C/svg%3E"
+                />
+
+                <div class="blur-shield">
+                  <div class="text-center">
+                    <p class="font-bold">รูปภาพถูกเบลอ</p>
+                    <p class="text-xs text-slate-300 mt-1">
+                      กดค้าง / แตะค้าง เพื่อดูภาพ
+                    </p>
+                  </div>
+                </div>
+
+                <div class="watermark-layer"></div>
+              </div>
+
+              <p class="text-[11px] text-slate-500 mt-2">
+                * เมื่อปล่อยมือ ภาพจะกลับไปเบลอทันที
+              </p>
+
+              <p class="message-time">13:21</p>
+            </div>
+          </div>
+
+          <!-- Own Message -->
+          <div class="message-row outgoing">
+            <div class="message-bubble outgoing-bubble">
+              <p class="chat-text">
+                รับทราบ เดี๋ยวลองกดค้างเพื่อดูรูปภาพ
+              </p>
+              <p class="message-time">13:22</p>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Composer -->
+        <footer class="border-t border-slate-700 bg-slate-900 p-3 md:p-4">
+          <div class="flex items-end gap-2">
+
+            <label
+              for="imageInput"
+              class="cursor-pointer shrink-0 w-11 h-11 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 flex items-center justify-center"
+              title="ส่งรูปภาพ"
+            >
+              🖼️
+            </label>
+
+            <input id="imageInput" type="file" accept="image/*" class="hidden" />
+
+            <textarea
+              id="messageInput"
+              rows="1"
+              placeholder="พิมพ์ข้อความทดลองที่จะบันทึกลง Supabase..."
+              class="chat-input flex-1 resize-none bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-sm outline-none focus:border-cyan-400"
+            ></textarea>
+
+            <button
+              id="sendBtn"
+              class="shrink-0 px-5 h-11 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold"
+            >
+              ส่ง
+            </button>
+          </div>
+
+          <p class="text-[11px] text-slate-500 mt-2">
+            Step 5 บันทึกข้อความลง Supabase Realtime แล้ว แต่ยังไม่ใช่ระบบ E2EE จริง ห้ามส่งข้อมูลสำคัญ
+          </p>
+        </footer>
+
+      </section>
+    </section>
+  </main>
+
+
+  <!-- Auth Modal -->
+  <div id="authModal" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[60]">
+    <div class="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-5 shadow-2xl">
+      <div class="mb-5">
+        <h3 class="font-bold text-xl">เข้าสู่ระบบ Privacy Chat</h3>
+        <p class="text-sm text-slate-400 mt-1">
+          ขั้นตอนนี้ใช้ Supabase Auth จริง แต่ยังไม่ใช่ระบบ E2EE
+        </p>
+      </div>
+
+      <form id="authForm" class="space-y-4" onsubmit="return false;">
+        <div>
+          <label class="text-sm text-slate-300">ชื่อที่แสดง</label>
+          <input
+            id="authDisplayName"
+            type="text"
+            placeholder="เช่น Smildday"
+            class="mt-1 w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 outline-none focus:border-cyan-400"
+          />
+        </div>
+
+        <div>
+          <label class="text-sm text-slate-300">Email</label>
+          <input
+            id="authEmail"
+            type="email"
+            placeholder="you@example.com"
+            autocomplete="email"
+            class="mt-1 w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 outline-none focus:border-cyan-400"
+          />
+        </div>
+
+        <div>
+          <label class="text-sm text-slate-300">Password</label>
+          <input
+            id="authPassword"
+            type="password"
+            placeholder="อย่างน้อย 6 ตัวอักษร"
+            autocomplete="current-password"
+            class="mt-1 w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 outline-none focus:border-cyan-400"
+          />
+        </div>
+
+        <div id="authStatus" class="hidden text-sm rounded-xl px-4 py-3"></div>
+
+        <button
+          id="signInBtn"
+          type="button"
+          class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl py-3"
+        >
+          เข้าสู่ระบบ
+        </button>
+
+        <button
+          id="signUpBtn"
+          type="button"
+          class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold rounded-xl py-3"
+        >
+          สมัครสมาชิก
+        </button>
+      </form>
+
+      <p class="text-xs text-slate-500 mt-4">
+        ใช้สำหรับทดสอบระบบเท่านั้น อย่าใช้รหัสผ่านสำคัญซ้ำกับเว็บอื่น
+      </p>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4 z-50">
+    <div class="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-5 shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-bold text-lg">ตั้งค่าผู้ดู</h3>
+        <button id="closeSettingsBtn" class="text-slate-400 hover:text-white text-xl">×</button>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="text-sm text-slate-300">ชื่อผู้ดูสำหรับ Watermark</label>
+          <input
+            id="viewerNameInput"
+            type="text"
+            value="Guest"
+            class="mt-1 w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 outline-none focus:border-cyan-400"
+          />
+        </div>
+
+        <div>
+          <label class="text-sm text-slate-300">IP ผู้ดู Demo</label>
+          <input
+            id="viewerIpInput"
+            type="text"
+            value="Demo-IP"
+            class="mt-1 w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 outline-none focus:border-cyan-400"
+          />
+          <p class="text-xs text-slate-500 mt-1">
+            หมายเหตุ: เบราว์เซอร์ไม่เปิดเผย Public IP โดยตรง ในขั้นนี้จึงใช้ค่า Demo ก่อน
+          </p>
+        </div>
+
+        <button
+          id="saveSettingsBtn"
+          class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl py-3"
+        >
+          บันทึก
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Supabase JS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- JS ของเรา -->
+  <script src="app.js"></script>
+</body>
+</html>

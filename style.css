@@ -1,0 +1,187 @@
+/* ป้องกันการเลือกข้อความทั้งหน้า */
+* {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* ให้ textarea ยังพิมพ์ได้ */
+textarea,
+input {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Scrollbar */
+.chat-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-scroll::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 999px;
+}
+
+.chat-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Message Layout */
+.message-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.message-row.incoming {
+  justify-content: flex-start;
+}
+
+.message-row.outgoing {
+  justify-content: flex-end;
+}
+
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #06b6d4, #8b5cf6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-weight: 800;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.message-bubble {
+  max-width: min(78%, 620px);
+  border-radius: 18px;
+  padding: 12px 14px;
+  position: relative;
+}
+
+.incoming-bubble {
+  background: #1e293b;
+  border-bottom-left-radius: 6px;
+}
+
+.outgoing-bubble {
+  background: #0891b2;
+  color: #ecfeff;
+  border-bottom-right-radius: 6px;
+}
+
+.chat-text {
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.message-time {
+  margin-top: 6px;
+  font-size: 10px;
+  opacity: 0.65;
+  text-align: right;
+}
+
+.chat-input {
+  max-height: 140px;
+}
+
+/* Protected Image */
+.secure-image-card {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: #020617;
+  touch-action: none;
+}
+
+.secure-image {
+  display: block;
+  width: 100%;
+  min-height: 180px;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+/* รูปภาพเริ่มต้นต้องเบลอ 100% */
+.protected-image {
+  filter: blur(26px) brightness(0.55);
+  transform: scale(1.04);
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+/* ตอนกดค้าง ภาพชัดขึ้น */
+.secure-image-card.viewing .protected-image {
+  filter: blur(0) brightness(1);
+  transform: scale(1);
+}
+
+/* ชั้นบอกผู้ใช้ว่าต้องกดค้าง */
+.blur-shield {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: rgba(2, 6, 23, 0.38);
+  color: white;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.secure-image-card.viewing .blur-shield {
+  opacity: 0;
+}
+
+/* Watermark Layer */
+.watermark-layer {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0.42;
+}
+
+.secure-image-card.viewing .watermark-layer {
+  display: block;
+}
+
+.watermark-item {
+  position: absolute;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+  transform: rotate(-24deg);
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+/* ลดโอกาสลากรูปออกจากเว็บ */
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+/* เวลาหน้าจอเล็ก */
+@media (max-width: 640px) {
+  .message-bubble {
+    max-width: 88%;
+  }
+
+  .chat-text {
+    font-size: 13px;
+  }
+}
