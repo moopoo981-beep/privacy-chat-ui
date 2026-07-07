@@ -1,6 +1,6 @@
 // ===============================
-// Privacy Chat UI - Step 6.1
-// Supabase Auth + Rooms + Delete Rooms + Realtime + E2EE Text Messages
+// Privacy Chat UI - Step 6.2
+// Supabase Auth + Rooms + Delete Rooms + Realtime + E2EE Text Messages + Room Code Gate + Typing Beep
 // ข้อความถูกเข้ารหัสด้วย Web Crypto API ก่อนส่งเข้า Supabase
 // รูปภาพยังไม่เข้ารหัส/อัปโหลดจริง จะทำในขั้นตอนถัดไป
 // ===============================
@@ -134,6 +134,63 @@ let messagesChannel = null;
 let myRooms = [];
 let allowProgrammaticCopy = false;
 const roomKeyCache = new Map();
+
+// ===============================
+// Typing Beep Sound
+// ใช้ Web Audio API ในเบราว์เซอร์ ฟรี ไม่ต้องใช้ไฟล์เสียง
+// ===============================
+
+let typingAudioContext = null;
+let lastTypingBeepAt = 0;
+let typingBeepEnabled = true;
+
+function getTypingAudioContext() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
+  if (!AudioContextClass) {
+    return null;
+  }
+
+  if (!typingAudioContext) {
+    typingAudioContext = new AudioContextClass();
+  }
+
+  return typingAudioContext;
+}
+
+function playTypingBeep() {
+  if (!typingBeepEnabled) return;
+
+  const now = Date.now();
+
+  // กันเสียงถี่เกินไปจนรบกวนและกินทรัพยากร
+  if (now - lastTypingBeepAt < 65) return;
+  lastTypingBeepAt = now;
+
+  const audioContext = getTypingAudioContext();
+  if (!audioContext) return;
+
+  if (audioContext.state === "suspended") {
+    audioContext.resume().catch(() => {});
+  }
+
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+
+  oscillator.type = "square";
+  oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+
+  gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.035, audioContext.currentTime + 0.006);
+  gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.045);
+
+  oscillator.connect(gain);
+  gain.connect(audioContext.destination);
+
+  oscillator.start(audioContext.currentTime);
+  oscillator.stop(audioContext.currentTime + 0.05);
+}
+
 
 // ===============================
 // Auth UI Helpers
@@ -711,7 +768,8 @@ async function saveRoomPassphrase() {
     if (roomPassphraseInput) roomPassphraseInput.value = "";
     updateEncryptionUI();
     await loadMessages(currentRoomId);
-    showRoomStatus("ใช้รหัสห้องสำเร็จ ข้อความจะแสดงหลังถอดรหัสในเบราว์เซอร์", "success");
+    await subscribeToRoom(currentRoomId);
+    showRoomStatus("ใช้รหัสห้องสำเร็จ: เปิดอ่านข้อความได้แล้ว และข้อความใหม่จะถูกส่งเป็นรหัส", "success");
   } catch (error) {
     console.error("saveRoomPassphrase error:", error);
     showRoomStatus(`สร้างกุญแจ E2EE ไม่สำเร็จ: ${getReadableError(error)}`, "error");
@@ -723,8 +781,10 @@ async function clearRoomPassphrase() {
 
   roomKeyCache.delete(currentRoomId);
   updateEncryptionUI();
-  await loadMessages(currentRoomId);
-  showRoomStatus("ล้างรหัสห้องออกจากหน่วยความจำแล้ว", "success");
+  await cleanupRealtimeChannel();
+  clearChatForRoom();
+  addSystemMessage("🔐 ล้างรหัสแล้ว — ต้องใส่รหัสห้องอีกครั้งเพื่ออ่านข้อความ");
+  showRoomStatus("ล้างรหัสห้องออกจากหน่วยความจำแล้ว ห้องกลับสู่สถานะล็อก", "success");
 }
 
 
@@ -1111,6 +1171,18 @@ async function setActiveRoom(roomId) {
 
   await loadCurrentRoomSalt(roomId);
   updateEncryptionUI();
+
+  // Step 6.2: ต้องมีรหัสห้องก่อนจึงจะโหลด/อ่านข้อความได้
+  // คนที่มีแค่ Room ID จะยังไม่เห็นข้อความในห้อง
+  if (!getCurrentRoomKey()) {
+    await cleanupRealtimeChannel();
+    clearChatForRoom();
+    addSystemMessage("🔐 ห้องนี้ถูกล็อก — ใส่รหัสห้อง E2EE ก่อนจึงจะอ่านข้อความและส่งข้อความได้");
+    showRoomStatus("ต้องใส่รหัสห้องก่อนเข้าถึงข้อความในห้องนี้", "info");
+    roomPassphraseInput?.focus();
+    return;
+  }
+
   await loadMessages(roomId);
   await subscribeToRoom(roomId);
 }
@@ -1139,7 +1211,7 @@ async function loadMessages(roomId) {
   for (const message of data || []) {
     await renderDatabaseMessage(message);
   }
-  showRoomStatus("พร้อมใช้งาน Realtime + E2EE", "success");
+  showRoomStatus("พร้อมใช้งาน: ข้อความถูกถอดรหัสในเครื่องคุณเท่านั้น", "success");
 }
 
 async function cleanupRealtimeChannel() {
@@ -1196,7 +1268,7 @@ async function renderDatabaseMessage(message) {
 
     if (!roomKey) {
       locked = true;
-      text = "🔒 ข้อความเข้ารหัส — ใส่รหัสห้องให้ถูกต้องเพื่ออ่านข้อความ";
+      text = "🔒 ข้อความถูกเข้ารหัส — ต้องมีรหัสห้องที่ถูกต้องเท่านั้นจึงอ่านได้";
     } else {
       try {
         text = await decryptText(message.ciphertext, message.iv, roomKey);
@@ -1282,7 +1354,7 @@ async function sendTextMessageToSupabase(text) {
     return;
   }
 
-  showRoomStatus("ส่งข้อความเข้ารหัสแล้ว Supabase เห็นเฉพาะ ciphertext", "success");
+  showRoomStatus("ส่งแล้ว: ข้อความถูกแปลงเป็นรหัสก่อนเข้า Supabase", "success");
 }
 
 
@@ -1490,6 +1562,7 @@ messageInput.addEventListener("keydown", (event) => {
 });
 
 messageInput.addEventListener("input", () => {
+  playTypingBeep();
   messageInput.style.height = "auto";
   messageInput.style.height = `${messageInput.scrollHeight}px`;
 });
